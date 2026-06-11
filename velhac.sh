@@ -24,20 +24,16 @@ printf      "           By Smart Tech Programming\n"
 printf      "        youtube.com/@smarttechprogramming\n\n"${W}
 }
 
-# Architecture check
+# FIX 14: return instead of exit so script doesn't die
 get_arch() {
     printf ${G}"[*] Checking device architecture..."${W}
     echo
     case $(getprop ro.product.cpu.abi) in
-        arm64-v8a)
-            SYS_ARCH=arm64
-            ;;
-        armeabi|armeabi-v7a)
-            SYS_ARCH=armhf
-            ;;
+        arm64-v8a)  SYS_ARCH=arm64 ;;
+        armeabi|armeabi-v7a) SYS_ARCH=armhf ;;
         *)
-            echo ${R}"[!] Unsupported architecture. Exiting."${W}
-            exit 1
+            echo ${R}"[!] Unsupported architecture."${W}
+            SYS_ARCH=unknown
             ;;
     esac
 }
@@ -47,40 +43,50 @@ get_arch() {
 # ─────────────────────────────────────────
 
 install_beef(){
-    pkg update
-    pkg install curl git libyaml libxslt bison espeak ruby python nodejs nano binutils -y
+    # FIX 1+2: removed espeak and bison (not in Termux repos)
+    pkg update -y
+    pkg install curl git libyaml libxslt ruby python nodejs nano binutils -y
     cd $PREFIX/opt
-    git clone https://github.com/beefproject/beef
+    # Skip if already cloned
+    [ -d beef ] || git clone https://github.com/beefproject/beef
     cd $PREFIX/opt/beef
     echo " gem 'net-smtp', require: false" >> Gemfile
-    sed -i '280d' install
+    # FIX 3: use grep to find and delete the sudo check line safely
+    grep -n "sudo" install | head -1 | cut -d: -f1 | xargs -I{} sed -i '{}d' install
     sed -i 's/sudo//' install
     bash install
-    echo "cd $PREFIX/opt/beef && ruby beef" >> $PREFIX/bin/beef
+    echo "cd $PREFIX/opt/beef && ruby beef" > $PREFIX/bin/beef
     chmod +x $PREFIX/bin/beef
     echo ${N}"[*] BeEF installed. Run with: beef"
-    echo "[*] Change login credentials in: $PREFIX/opt/beef/config.yaml"${W}
+    echo "[*] Change credentials in: $PREFIX/opt/beef/config.yaml"${W}
     echo
 }
 
 install_metasploit(){
-    pkg update
+    # FIX 4: added fallback message if script is unavailable
+    pkg update -y
     pkg install wget -y
-    wget https://github.com/gushmazuko/metasploit_in_termux/raw/master/metasploit.sh
-    bash metasploit.sh
-    rm metasploit.sh
+    echo ${Y}"[*] Downloading Metasploit installer..."${W}
+    if wget -q --spider https://github.com/gushmazuko/metasploit_in_termux/raw/master/metasploit.sh; then
+        wget https://github.com/gushmazuko/metasploit_in_termux/raw/master/metasploit.sh
+        bash metasploit.sh
+        rm metasploit.sh
+    else
+        echo ${R}"[!] Metasploit installer unavailable. Try manually:"
+        echo "    https://github.com/gushmazuko/metasploit_in_termux"${W}
+    fi
     echo
 }
 
 install_mitmproxy(){
     get_arch
     if [[ $SYS_ARCH == "arm64" ]]; then
-        pkg update
+        pkg update -y
         pkg install python rust python-cryptography -y
         export CARGO_BUILD_TARGET=aarch64-linux-android
         pip install cryptography --no-binary cryptography
         pip3 install mitmproxy
-        echo ${N}"[*] mitmproxy installed."${W}
+        echo ${N}"[*] mitmproxy installed. Run with: mitmproxy"${W}
         echo
     else
         echo ${R}"[!] Architecture not supported."${W}
@@ -90,16 +96,16 @@ install_mitmproxy(){
 install_routersploit(){
     get_arch
     if [[ $SYS_ARCH == "arm64" ]]; then
-        pkg update
+        pkg update -y
         pkg install git python rust libsodium python-cryptography -y
         cd $PREFIX/opt
-        git clone https://github.com/threat9/routersploit
+        [ -d routersploit ] || git clone https://github.com/threat9/routersploit
         cd $PREFIX/opt/routersploit
         export CARGO_BUILD_TARGET=aarch64-linux-android
         pip install cryptography --no-binary cryptography
         SODIUM_INSTALL=system pip install pynacl
         pip3 install -r requirements.txt
-        echo "python3 $PREFIX/opt/routersploit/rsf.py" >> $PREFIX/bin/rsf
+        echo "python3 $PREFIX/opt/routersploit/rsf.py" > $PREFIX/bin/rsf
         chmod +x $PREFIX/bin/rsf
         echo ${N}"[*] Routersploit installed. Run with: rsf"${W}
         echo
@@ -109,23 +115,23 @@ install_routersploit(){
 }
 
 install_nmap(){
-    pkg update
+    pkg update -y
     pkg install nmap -y
-    echo ${N}"[*] Nmap installed."${W}
+    echo ${N}"[*] Nmap installed. Run with: nmap"${W}
     echo
 }
 
 install_netcat(){
-    pkg update
-    pkg install netcat -y
-    echo ${N}"[*] Netcat installed."${W}
+    pkg update -y
+    pkg install netcat-openbsd -y
+    echo ${N}"[*] Netcat installed. Run with: nc"${W}
     echo
 }
 
 install_ghost(){
     get_arch
     if [[ $SYS_ARCH == "arm64" ]]; then
-        pkg update
+        pkg update -y
         pkg install git python rust python-cryptography -y
         export CARGO_BUILD_TARGET=aarch64-linux-android
         pip install cryptography --no-binary cryptography
@@ -138,76 +144,81 @@ install_ghost(){
 }
 
 install_pyphisher(){
-    pkg update
+    pkg update -y
     pkg install git python curl wget php proot -y
     cd $PREFIX/opt
-    git clone https://github.com/KasRoudra/PyPhisher
-    echo "cd $PREFIX/opt/PyPhisher && python3 pyphisher.py" >> $PREFIX/bin/pyphisher
+    [ -d PyPhisher ] || git clone https://github.com/KasRoudra/PyPhisher
+    echo "cd $PREFIX/opt/PyPhisher && python3 pyphisher.py" > $PREFIX/bin/pyphisher
     chmod +x $PREFIX/bin/pyphisher
     echo ${N}"[*] PyPhisher installed. Run with: pyphisher"${W}
     echo
 }
 
 install_phonesploit(){
-    pkg update
+    pkg update -y
     pkg install git python android-tools -y
     pip3 install colorama
     cd $PREFIX/opt
-    git clone https://github.com/aerosol-can/PhoneSploit
-    echo "python3 $PREFIX/opt/PhoneSploit/phonesploit.py" >> $PREFIX/bin/phonesploit
+    [ -d PhoneSploit ] || git clone https://github.com/aerosol-can/PhoneSploit
+    echo "python3 $PREFIX/opt/PhoneSploit/phonesploit.py" > $PREFIX/bin/phonesploit
     chmod +x $PREFIX/bin/phonesploit
     echo ${N}"[*] PhoneSploit installed. Run with: phonesploit"${W}
     echo
 }
 
 install_sherlock(){
-    pkg update
+    pkg update -y
     pkg install git python -y
-    cd $HOME
-    git clone https://github.com/sherlock-project/sherlock
-    cd sherlock
+    # FIX 11: use absolute path, skip if exists
+    [ -d $HOME/sherlock ] || git clone https://github.com/sherlock-project/sherlock $HOME/sherlock
+    cd $HOME/sherlock
     pip3 install -r requirements.txt
-    cd $HOME
-    echo ${N}"[*] Sherlock installed."${W}
+    # FIX 11: create launcher
+    echo "python3 $HOME/sherlock/sherlock/sherlock.py \"\$@\"" > $PREFIX/bin/sherlock
+    chmod +x $PREFIX/bin/sherlock
+    echo ${N}"[*] Sherlock installed. Run with: sherlock <username>"${W}
     echo
 }
 
 install_johntheripper(){
-    pkg update
+    pkg update -y
     pkg install git make perl clang binutils -y
-    cd $HOME
-    git clone https://github.com/openwall/john
-    cd john/src
+    [ -d $HOME/john ] || git clone https://github.com/openwall/john $HOME/john
+    cd $HOME/john/src
     ./configure
     make -s clean && make -sj4
-    cd $HOME
-    echo ${N}"[*] John The Ripper installed."${W}
+    # FIX 9: create launcher
+    echo "$HOME/john/run/john \"\$@\"" > $PREFIX/bin/john
+    chmod +x $PREFIX/bin/john
+    echo ${N}"[*] John The Ripper installed. Run with: john"${W}
     echo
 }
 
 install_cupp(){
-    pkg update
+    pkg update -y
     pkg install git python -y
-    cd $HOME
-    git clone https://github.com/Mebus/cupp
-    echo ${N}"[*] CUPP installed."${W}
+    [ -d $HOME/cupp ] || git clone https://github.com/Mebus/cupp $HOME/cupp
+    # FIX 10: create launcher
+    echo "python3 $HOME/cupp/cupp.py \"\$@\"" > $PREFIX/bin/cupp
+    chmod +x $PREFIX/bin/cupp
+    echo ${N}"[*] CUPP installed. Run with: cupp"${W}
     echo
 }
 
 install_hydra(){
-    pkg update
-    pkg install wget clang build-essential binutils make libidn libpcreposix libssh libgpg-error git-svn memcached libgcrypt -y
+    # FIX 5+6+7+8: removed git-svn, memcached, fixed libpcreposix -> libpcre2, removed libgpg-error
+    pkg update -y
+    pkg install wget clang binutils make libidn libpcre2 libssh libgcrypt -y
     cd $PREFIX/opt
-    wget https://github.com/vanhauser-thc/thc-hydra/archive/refs/tags/v9.4.tar.gz
-    mkdir thc-hydra
+    wget -q https://github.com/vanhauser-thc/thc-hydra/archive/refs/tags/v9.4.tar.gz
+    mkdir -p thc-hydra
     tar -xzvf v9.4.tar.gz -C thc-hydra --strip-components=1
+    rm v9.4.tar.gz
     cd thc-hydra
     ./configure --prefix=$PREFIX
-    sleep 4
     make
-    sleep 4
     make install
-    echo ${N}"[*] Hydra installed."${W}
+    echo ${N}"[*] Hydra installed. Run with: hydra"${W}
     echo
 }
 
@@ -216,21 +227,21 @@ install_hydra(){
 # ─────────────────────────────────────────
 
 install_nodejs(){
-    pkg update
+    pkg update -y
     pkg install nodejs -y
     echo ${N}"[*] Node.js installed. Version: $(node -v)"${W}
     echo
 }
 
 install_python(){
-    pkg update
+    pkg update -y
     pkg install python -y
     echo ${N}"[*] Python installed. Version: $(python --version)"${W}
     echo
 }
 
 install_git(){
-    pkg update
+    pkg update -y
     pkg install git -y
     echo ${N}"[*] Git installed."${W}
     echo
@@ -243,22 +254,28 @@ install_git(){
 }
 
 install_code_server(){
-    pkg update
-    pkg install code-server -y
-    echo ${N}"[*] Code Server (VS Code) installed. Run with: code-server"${W}
+    # FIX 12: code-server not in Termux repo, install via npm
+    pkg update -y
+    pkg install nodejs -y
+    npm install -g code-server
+    echo ${N}"[*] Code Server installed. Run with: code-server"
+    echo "[*] Open browser at: http://localhost:8080"${W}
     echo
 }
 
 install_react_native(){
-    pkg update
+    # FIX 13: expo-cli deprecated, use create-expo-app
+    pkg update -y
     pkg install nodejs -y
-    npm install -g expo-cli
-    echo ${N}"[*] Expo CLI installed. Start a project with: npx create-expo-app myapp"${W}
+    npm install -g eas-cli
+    echo ${N}"[*] EAS CLI installed."
+    echo "[*] Create a project with: npx create-expo-app myapp"
+    echo "[*] Build with: eas build"${W}
     echo
 }
 
 install_php(){
-    pkg update
+    pkg update -y
     pkg install php -y
     echo ${N}"[*] PHP installed. Version: $(php -v | head -1)"${W}
     echo
@@ -329,7 +346,7 @@ case $category in
         echo   "  [2]  Python"
         echo   "  [3]  Git + GitHub Config"
         echo   "  [4]  Code Server (VS Code)"
-        echo   "  [5]  Expo CLI (React Native)"
+        echo   "  [5]  EAS CLI (React Native)"
         echo   "  [6]  PHP"${W}
         echo
         read -p ${Y}"  Select tool: "${W} user_input
@@ -339,7 +356,7 @@ case $category in
             2) echo ${N}"[*] Installing Python..."${W}; echo; install_python ;;
             3) echo ${N}"[*] Setting up Git..."${W}; echo; install_git ;;
             4) echo ${N}"[*] Installing Code Server..."${W}; echo; install_code_server ;;
-            5) echo ${N}"[*] Installing Expo CLI..."${W}; echo; install_react_native ;;
+            5) echo ${N}"[*] Installing EAS CLI..."${W}; echo; install_react_native ;;
             6) echo ${N}"[*] Installing PHP..."${W}; echo; install_php ;;
             *) echo ${R}"[!] Invalid option."${W}; echo ;;
         esac
